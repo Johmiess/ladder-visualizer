@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>How Many Ladders?</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,8 +34,9 @@
   --accent: #f4be3a; --accent-fill: #f2b41b; --scene: #161b21; --floor: #262d36; --wall: #3a4552; --edge: #8794a3;
   color-scheme: dark; }
 
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
 html, body { height: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
 
 .app {
   height: 100%; box-sizing: border-box;
@@ -104,6 +110,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .panel { overflow: visible; }
 }
 </style>
+</head>
+<body>
 
 <div class="app">
   <aside class="panel">
@@ -454,3 +462,5 @@ for (const [id, idx, max] of [['dimL', 0, 60], ['dimW', 1, 60], ['dimH', 2, 20]]
 applyTheme(); renderControls(); resize(); update(); requestAnimationFrame(loop);
 })();
 </script>
+</body>
+</html>
