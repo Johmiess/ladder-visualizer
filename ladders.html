@@ -1,0 +1,456 @@
+<title>How Many Ladders?</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: control panel on the left, 3D room stage on the right; stacks on phones. */
+:root {
+  --bg: #e9edf1;
+  --panel: #f8fafb;
+  --fg: #1b2026;
+  --muted: #5d6773;
+  --line: #d3d9e0;
+  --accent: #a86f00;      /* safety-yellow, darkened for text on light */
+  --accent-fill: #f2b41b;
+  --scene: #dfe4ea;
+  --floor: #c9d0d8;
+  --wall: #b9c3ce;
+  --edge: #6d7885;
+  --f-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a3af; --line: #2c343e;
+  --accent: #f4be3a; --accent-fill: #f2b41b; --scene: #161b21; --floor: #262d36; --wall: #3a4552; --edge: #8794a3;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a3af; --line: #2c343e;
+  --accent: #f4be3a; --accent-fill: #f2b41b; --scene: #161b21; --floor: #262d36; --wall: #3a4552; --edge: #8794a3;
+  color-scheme: dark; }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+
+.app {
+  height: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: minmax(300px, 370px) 1fr; gap: 16px;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; overflow-y: auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.stage { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--scene); min-width: 0; min-height: 0; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+h1 { font-family: var(--f-display); font-size: 26px; line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 6px 0 0; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg button {
+  font: 500 13px/1.2 var(--f-body); color: var(--fg); background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 6px; cursor: pointer;
+}
+.seg button:hover { border-color: var(--edge); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--panel); border-color: var(--fg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ladders { display: flex; flex-direction: column; gap: 6px; }
+.ladders button {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: left;
+  font: 500 13px/1.3 var(--f-body); color: var(--fg); background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; cursor: pointer;
+}
+.ladders button span { color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.ladders button[aria-pressed="true"] { border-color: var(--accent-fill); box-shadow: inset 3px 0 0 var(--accent-fill); }
+
+.dims { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dims label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.dims input {
+  font: 500 14px var(--f-mono); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; width: 100%; box-sizing: border-box; min-width: 0;
+}
+.metric { font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+.answer { border-top: 1px solid var(--line); padding-top: 18px; }
+.big { font-family: var(--f-display); font-weight: 700; font-size: 64px; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.big small { font-size: 18px; font-weight: 500; color: var(--fg); margin-left: 6px; }
+.why { margin: 10px 0 0; max-width: 60ch; }
+.facts { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+.compare { display: flex; flex-direction: column; gap: 4px; }
+.compare button {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+  background: transparent; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; color: var(--fg); text-align: left; font: inherit;
+}
+.compare button:hover { background: var(--bg); }
+.compare .bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.compare .bar i { display: block; height: 100%; background: var(--accent-fill); }
+.compare b { font-family: var(--f-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--muted); margin: 0; max-width: 60ch; }
+
+@media (max-width: 800px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: 1fr; }
+  .stage { height: 58vh; min-height: 320px; order: -1; }
+  .panel { overflow: visible; }
+}
+</style>
+
+<div class="app">
+  <aside class="panel">
+    <header>
+      <h1>How many ladders fit in the room?</h1>
+      <p class="sub">Pick a room and a ladder. Ladders are packed solid, wall to wall and floor to ceiling.</p>
+    </header>
+
+    <section>
+      <p class="label">Room</p>
+      <div class="seg" id="rooms"></div>
+    </section>
+
+    <section>
+      <p class="label">Ladder</p>
+      <div class="ladders" id="ladders"></div>
+    </section>
+
+    <section>
+      <p class="label">Room size (feet)</p>
+      <div class="dims">
+        <label for="dimL">Length <input id="dimL" type="number" min="3" max="60" step="0.5"></label>
+        <label for="dimW">Width <input id="dimW" type="number" min="3" max="60" step="0.5"></label>
+        <label for="dimH">Ceiling <input id="dimH" type="number" min="3" max="20" step="0.5"></label>
+      </div>
+      <p class="metric" id="metric"></p>
+    </section>
+
+    <section class="answer" aria-live="polite">
+      <div class="big"><span id="count">0</span><small id="countUnit">ladders</small></div>
+      <p class="why" id="why"></p>
+      <dl class="facts" id="facts"></dl>
+    </section>
+
+    <section>
+      <p class="label">All three rooms, same ladder</p>
+      <div class="compare" id="compare"></div>
+    </section>
+
+    <p class="note">Assumes an empty room: no desks, beds, toilets or door swing. Ladders are packed in neat rows, with leftover gaps filled by ladders turned another way. Treat each number as an upper bound.</p>
+  </aside>
+
+  <main class="stage" id="stage">
+    <span class="hint">Drag to orbit · scroll or pinch to zoom · the grey figure is 5 ft 7 in</span>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+const FT = 0.3048;
+const MAX_RENDER = 9000;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const ROOMS = {
+  classroom: { name: 'Classroom', ft: [30, 24, 10] },
+  bedroom:   { name: 'Bedroom',   ft: [12, 10, 8] },
+  restroom:  { name: 'Restroom',  ft: [8, 5, 8] },
+};
+const ALL_PERMS = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+// dims are [width, height/length, depth] in metres, in the ladder's own frame
+const LADDERS = {
+  folded:   { name: '6 ft stepladder, folded', tag: '22 × 5 in, 6 ft tall', dims: [0.56, 1.83, 0.13], perms: ALL_PERMS, stack: true },
+  open:     { name: '6 ft stepladder, opened', tag: '22 × 39 in footprint', dims: [0.56, 1.75, 1.00], perms: [[0,1,2],[2,1,0]], stack: false },
+  straight: { name: '10 ft straight ladder',   tag: '16 × 3.5 in, 10 ft long', dims: [0.41, 3.05, 0.09], perms: ALL_PERMS, stack: true },
+};
+
+const state = { room: 'classroom', ladder: 'folded', dims: {} };
+for (const k in ROOMS) state.dims[k] = ROOMS[k].ft.slice();
+
+/* ---------- packing ---------- */
+const EPS = 1e-6;
+function grid(r, d, p) {
+  const dx = d[p[0]], dy = d[p[1]], dz = d[p[2]];
+  const nx = Math.floor((r.sx + EPS) / dx), ny = Math.floor((r.sy + EPS) / dy), nz = Math.floor((r.sz + EPS) / dz);
+  return { dx, dy, dz, nx, ny, nz, n: nx * ny * nz };
+}
+function slabs(r, g) {
+  const ux = g.nx * g.dx, uy = g.ny * g.dy, uz = g.nz * g.dz;
+  return [
+    { x: r.x + ux, y: r.y, z: r.z, sx: r.sx - ux, sy: r.sy, sz: r.sz },
+    { x: r.x, y: r.y, z: r.z + uz, sx: ux, sy: r.sy, sz: r.sz - uz },
+    { x: r.x, y: r.y + uy, z: r.z, sx: ux, sy: r.sy - uy, sz: uz },
+  ];
+}
+function best(r, L, depth) {
+  let top = { n: 0, p: null, main: 0 };
+  if (depth <= 0) return top;
+  for (const p of L.perms) {
+    const g = grid(r, L.dims, p);
+    if (!g.n) continue;
+    let total = g.n;
+    for (const s of slabs(r, g)) total += best(s, L, depth - 1).n;
+    if (total > top.n) top = { n: total, p, main: g.n, g };
+  }
+  return top;
+}
+function build(r, L, depth, out) {
+  const b = best(r, L, depth);
+  if (!b.n) return;
+  const g = b.g;
+  for (let j = 0; j < g.ny; j++) for (let k = 0; k < g.nz; k++) for (let i = 0; i < g.nx; i++)
+    out.push({ x: r.x + (i + .5) * g.dx, y: r.y + (j + .5) * g.dy, z: r.z + (k + .5) * g.dz, p: b.p });
+  for (const s of slabs(r, g)) build(s, L, depth - 1, out);
+}
+function solve(roomKey, ladderKey) {
+  const L = LADDERS[ladderKey];
+  const [l, w, h] = state.dims[roomKey].map(v => v * FT);
+  const region = { x: 0, y: 0, z: 0, sx: l, sy: L.stack ? h : Math.min(h, L.dims[1] + EPS), sz: w };
+  const top = best(region, L, 3);
+  return { top, l, w, h, L };
+}
+
+/* ---------- ladder geometry ---------- */
+const COL = { rail: 0xeaa80f, rung: 0xb9c0c8, cap: 0x3a3f46 };
+function boxPart(cx, cy, cz, sx, sy, sz, color) {
+  const g = new THREE.BoxGeometry(sx, sy, sz); g.translate(cx, cy, cz); return { g, color };
+}
+function beamPart(a, b, t, color) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+  const dir = B.clone().sub(A), len = dir.length();
+  const g = new THREE.BoxGeometry(t, len, t);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
+  const m = A.add(B).multiplyScalar(.5); g.translate(m.x, m.y, m.z);
+  return { g, color };
+}
+function merge(parts) {
+  const pos = [], nor = [], col = [];
+  const c = new THREE.Color();
+  for (const { g, color } of parts) {
+    const ng = g.toNonIndexed(); c.setHex(color);
+    pos.push(...ng.attributes.position.array); nor.push(...ng.attributes.normal.array);
+    for (let i = 0; i < ng.attributes.position.count; i++) col.push(c.r, c.g, c.b);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+function ladderGeometry(key) {
+  const [W, H, D] = LADDERS[key].dims, p = [];
+  if (key === 'folded') {
+    for (const sx of [-1, 1]) {
+      p.push(boxPart(sx * (W / 2 - .03), 0, -.035, .05, H, .05, COL.rail));
+      p.push(boxPart(sx * (W / 2 - .05), -.05, .04, .04, H - .1, .04, COL.rail));
+    }
+    for (let k = 1; k <= 5; k++) p.push(boxPart(0, -H / 2 + .3 * k, -.035, W - .1, .03, .07, COL.rung));
+    p.push(boxPart(0, H / 2 - .03, 0, W, .06, D, COL.cap));
+  } else if (key === 'open') {
+    const top = H / 2 - .05, bot = -H / 2;
+    for (const sx of [-1, 1]) {
+      const x = sx * (W / 2 - .03), xb = sx * (W / 2 - .06);
+      p.push(beamPart([x, bot, -D / 2 + .03], [x, top, -.07], .05, COL.rail));
+      p.push(beamPart([xb, bot, D / 2 - .03], [xb, top, .07], .04, COL.rail));
+      p.push(beamPart([x, -.05, -.32], [xb, -.05, .32], .015, COL.cap));
+    }
+    for (let k = 1; k <= 4; k++) {
+      const t = k / 5, y = bot + (top - bot) * t, z = (-D / 2 + .03) + ((-.07) - (-D / 2 + .03)) * t;
+      p.push(boxPart(0, y, z, W - .1, .03, .09, COL.rung));
+    }
+    p.push(boxPart(0, H / 2 - .025, 0, W, .05, .22, COL.cap));
+  } else {
+    for (const sx of [-1, 1]) p.push(boxPart(sx * (W / 2 - .025), 0, 0, .05, H, .08, COL.rail));
+    const n = Math.floor(H / .3);
+    for (let k = 0; k < n; k++) p.push(boxPart(0, -H / 2 + .15 + .3 * k + (H - n * .3) / 2, 0, W - .05, .035, .035, COL.rung));
+  }
+  return merge(p);
+}
+
+// orientation matrices: perm p puts local axis p[j] along world axis j
+const ORIENT = new Map();
+for (const p of ALL_PERMS) {
+  const cols = [];
+  for (let j = 0; j < 3; j++) cols[p[j]] = new THREE.Vector3(j === 0 ? 1 : 0, j === 1 ? 1 : 0, j === 2 ? 1 : 0);
+  let inv = 0; for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) if (p[a] > p[b]) inv++;
+  if (inv % 2) cols[0].negate();   // keep it a rotation, not a mirror
+  ORIENT.set(p.join(''), new THREE.Matrix4().makeBasis(cols[0], cols[1], cols[2]));
+}
+
+/* ---------- scene ---------- */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 500);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2 - .03;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6b7380, .75));
+const sun = new THREE.DirectionalLight(0xffffff, .75); sun.position.set(6, 12, 9); scene.add(sun);
+
+const ladderMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .15, side: THREE.DoubleSide });
+const floorMat = new THREE.MeshStandardMaterial({ roughness: 1 });
+const wallMat = new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, opacity: .45, side: THREE.DoubleSide, depthWrite: false });
+const edgeMat = new THREE.LineBasicMaterial();
+const personMat = new THREE.MeshStandardMaterial({ color: 0x8a939e, roughness: .8 });
+
+let roomGroup = null, ladderMesh = null, lastGeoKey = null, placements = [], anim = { t0: 0, total: 0 };
+const meshes = {};
+
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function applyTheme() {
+  scene.background = new THREE.Color(cssVar('--scene'));
+  floorMat.color.set(cssVar('--floor')); wallMat.color.set(cssVar('--wall')); edgeMat.color.set(cssVar('--edge'));
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function buildRoom(l, w, h) {
+  if (roomGroup) { scene.remove(roomGroup); roomGroup.traverse(o => o.geometry && o.geometry.dispose()); }
+  roomGroup = new THREE.Group();
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(l, w), floorMat);
+  floor.rotation.x = -Math.PI / 2; floor.position.set(l / 2, 0, w / 2); roomGroup.add(floor);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(l, h), wallMat); back.position.set(l / 2, h / 2, 0); roomGroup.add(back);
+  const side = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat); side.rotation.y = Math.PI / 2; side.position.set(0, h / 2, w / 2); roomGroup.add(side);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(l, h, w)), edgeMat);
+  edges.position.set(l / 2, h / 2, w / 2); roomGroup.add(edges);
+  // 1.7 m figure for scale, standing just outside the open front corner
+  const person = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.17, .2, 1.42, 16), personMat); body.position.y = .71;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.13, 16, 12), personMat); head.position.y = 1.57;
+  person.add(body, head); person.position.set(l + .45, 0, w + .45); roomGroup.add(person);
+  scene.add(roomGroup);
+}
+
+function fitCamera(l, w, h) {
+  const c = new THREE.Vector3(l / 2, h / 2, w / 2), m = Math.max(l, w, h * 1.4);
+  controls.target.copy(c);
+  camera.position.copy(c).add(new THREE.Vector3(.95, .8, 1.2).normalize().multiplyScalar(m * 1.75));
+  controls.update();
+}
+
+function render3D(res) {
+  const { l, w, h, L } = res;
+  buildRoom(l, w, h);
+  placements = [];
+  if (res.top.n) {
+    const region = { x: 0, y: 0, z: 0, sx: l, sy: L.stack ? h : Math.min(h, L.dims[1] + EPS), sz: w };
+    build(region, L, 3, placements);
+    placements.sort((a, b) => a.y - b.y || a.z - b.z || a.x - b.x);
+  }
+  if (!meshes[state.ladder]) {
+    meshes[state.ladder] = new THREE.InstancedMesh(ladderGeometry(state.ladder), ladderMat, MAX_RENDER);
+  }
+  if (ladderMesh) scene.remove(ladderMesh);
+  ladderMesh = meshes[state.ladder]; scene.add(ladderMesh);
+  const M = new THREE.Matrix4(), S = new THREE.Matrix4().makeScale(.985, .985, .985);
+  const n = Math.min(placements.length, MAX_RENDER);
+  for (let i = 0; i < n; i++) {
+    const pl = placements[i];
+    M.copy(ORIENT.get(pl.p.join(''))).multiply(S).setPosition(pl.x, pl.y, pl.z);
+    ladderMesh.setMatrixAt(i, M);
+  }
+  ladderMesh.instanceMatrix.needsUpdate = true;
+  anim = { t0: performance.now(), total: n };
+  ladderMesh.count = reduceMotion ? n : 0;
+  const key = state.room + state.dims[state.room].join(',');
+  if (key !== lastGeoKey) { fitCamera(l, w, h); lastGeoKey = key; }
+}
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(r.height, 1); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+function loop(now) {
+  if (ladderMesh && ladderMesh.count < anim.total) {
+    const t = Math.min(1, (now - anim.t0) / 1400), e = 1 - Math.pow(1 - t, 3);
+    ladderMesh.count = Math.ceil(anim.total * e);
+  }
+  controls.update(); renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('en-US');
+const ftIn = m => { const ins = Math.round(m / 0.0254); const f = Math.floor(ins / 12), i = ins % 12; return i ? `${f} ft ${i} in` : `${f} ft`; };
+
+function renderControls() {
+  $('rooms').innerHTML = Object.entries(ROOMS).map(([k, r]) =>
+    `<button type="button" id="room-${k}" data-room="${k}" aria-pressed="${k === state.room}">${r.name}</button>`).join('');
+  $('ladders').innerHTML = Object.entries(LADDERS).map(([k, L]) =>
+    `<button type="button" id="ladder-${k}" data-ladder="${k}" aria-pressed="${k === state.ladder}">${L.name}<span>${L.tag}</span></button>`).join('');
+  const [l, w, h] = state.dims[state.room];
+  $('dimL').value = l; $('dimW').value = w; $('dimH').value = h;
+}
+
+function update() {
+  const res = solve(state.room, state.ladder);
+  const { top, l, w, h, L } = res;
+  $('count').textContent = fmt(top.n);
+  $('countUnit').textContent = top.n === 1 ? 'ladder' : 'ladders';
+  $('metric').textContent = `${l.toFixed(1)} × ${w.toFixed(1)} m floor, ${h.toFixed(2)} m ceiling · ${fmt(Math.round(l * w * h * 35.3147))} cu ft`;
+
+  const roomName = ROOMS[state.room].name.toLowerCase();
+  let why;
+  if (!top.n) {
+    why = `None. The ${L.name.split(',')[0]} is ${ftIn(L.dims[1])} long, and this ${roomName} has no direction with that much room.`;
+  } else {
+    const g = top.g, extra = top.n - top.main;
+    const turned = top.p[1] === 1 ? 'standing upright' : 'lying on their side';
+    why = `The main block is ${g.nx} × ${g.nz} ladders across the floor, ${g.ny} ${g.ny === 1 ? 'layer' : 'layers'} high, ${turned}.` +
+      (extra ? ` Another ${fmt(extra)} squeeze into the leftover gaps, turned a different way.` : ' Nothing else fits in the leftover gaps.');
+    if (!L.stack) why += ' Open stepladders can’t stack, so this is one layer.';
+  }
+  $('why').textContent = why;
+
+  const vol = L.dims[0] * L.dims[1] * L.dims[2];
+  const fill = top.n ? (top.n * vol) / (l * w * h) * 100 : 0;
+  const shown = Math.min(top.n, MAX_RENDER);
+  $('facts').innerHTML =
+    `<dt>Space used</dt><dd>${fill.toFixed(1)}% of the room${L.stack ? '' : ' (by box volume)'}</dd>` +
+    `<dt>Ladder box</dt><dd>${(L.dims[0] * 100).toFixed(0)} × ${(L.dims[2] * 100).toFixed(0)} × ${(L.dims[1] * 100).toFixed(0)} cm</dd>` +
+    `<dt>Stacked end to end</dt><dd>${top.n ? fmt(Math.round(top.n * L.dims[1] / FT)) + ' ft of ladder' : '—'}</dd>` +
+    (shown < top.n ? `<dt>Drawn</dt><dd>first ${fmt(shown)} only</dd>` : '');
+
+  const counts = Object.keys(ROOMS).map(k => ({ k, n: solve(k, state.ladder).top.n }));
+  const max = Math.max(1, ...counts.map(c => c.n));
+  $('compare').innerHTML = counts.map(({ k, n }) => {
+    const d = state.dims[k];
+    return `<button type="button" id="cmp-${k}" data-room="${k}"><span>${ROOMS[k].name} <span style="color:var(--muted);font-size:12px">${d[0]} × ${d[1]} × ${d[2]} ft</span></span><b>${fmt(n)}</b><span class="bar"><i style="width:${(n / max) * 100}%"></i></span></button>`;
+  }).join('');
+
+  render3D(res);
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.room) { state.room = b.dataset.room; renderControls(); update(); }
+  else if (b.dataset.ladder) { state.ladder = b.dataset.ladder; renderControls(); update(); }
+});
+let timer;
+for (const [id, idx, max] of [['dimL', 0, 60], ['dimW', 1, 60], ['dimH', 2, 20]]) {
+  $(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!isFinite(v)) return;
+    state.dims[state.room][idx] = Math.min(max, Math.max(3, v));
+    clearTimeout(timer); timer = setTimeout(update, 200);
+  });
+}
+
+applyTheme(); renderControls(); resize(); update(); requestAnimationFrame(loop);
+})();
+</script>
